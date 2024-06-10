@@ -79,4 +79,25 @@ TICKLENS_ADDRESSES: Dict[
             "0x8516944E89f296eb6473d79aED1Ba12088016c9e"
         ),
     },
+    # BNB Chain
+    56: {
+        # Pancakeswap V3
+        # ref: https://docs.uniswap.org/contracts/v3/reference/deployments
+        to_checksum_address("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"): to_checksum_address(
+            "0x9a489505a00cE272eAa5e07Dba6491314CaE3796"
+        ),
+        # Uniswap V3
+        # ref: https://docs.uniswap.org/contracts/v3/reference/deployments
+        to_checksum_address("0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7"): to_checksum_address(
+            "0xD9270014D396281579760619CCf4c3af0501A47C"
+        ),
+    },
+    # Base Chain
+    8453: {
+        # Uniswap V3
+        # ref: https://docs.uniswap.org/contracts/v3/reference/deployments
+        to_checksum_address("0x33128a8fC17869897dcE68Ed026d694621f6FDfD"): to_checksum_address(
+            "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d"
+        ),
+    },
 }

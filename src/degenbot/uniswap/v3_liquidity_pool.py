@@ -5,12 +5,13 @@ import warnings
 from bisect import bisect_left
 from decimal import Decimal
 from fractions import Fraction
-from threading import Lock
+from threading import Lock, RLock
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from eth_typing import ChecksumAddress
 from eth_utils.address import to_checksum_address
 from web3.contract.contract import Contract
+from web3.exceptions import BadFunctionCallOutput
 
 from .. import config
 from ..baseclasses import BaseLiquidityPool
@@ -53,6 +54,7 @@ class V3LiquidityPool(BaseLiquidityPool):
     _TICKSPACING_BY_FEE = {
         100: 1,
         500: 10,
+        2500: 50, # degisti
         3000: 60,
         10000: 200,
     }
@@ -90,7 +92,7 @@ class V3LiquidityPool(BaseLiquidityPool):
         )
 
         # held for operations that manipulate state data
-        self._state_lock = Lock()
+        self._state_lock = RLock() #degisti
 
         self._update_block = state_block if state_block else _w3.eth.get_block_number()
 
@@ -218,11 +220,23 @@ class V3LiquidityPool(BaseLiquidityPool):
             block_identifier=self._update_block
         )
 
-        (
-            self.sqrt_price_x96,
-            self.tick,
-            *_,
-        ) = _w3_contract.functions.slot0().call(block_identifier=self._update_block)
+        try:# degisti
+            (
+                self.sqrt_price_x96,
+                self.tick,
+                *_,
+            ) = _w3_contract.functions.slot0().call(block_identifier=self._update_block)
+        except BadFunctionCallOutput:# degisti
+            if not silent:# degisti
+                print(f"Could not decode with eth_abi, switching to manual decoding...")# degisti
+            raw_output = _w3.eth.call({# degisti
+                'to': _w3_contract.address,# degisti
+                'data': _w3_contract.encodeABI(fn_name='slot0')# degisti
+            })# degisti
+            uint160_bytes = raw_output[:32]# degisti
+            int24_bytes = raw_output[32:64]# degisti
+            self.sqrt_price_x96 = int.from_bytes(uint160_bytes, 'big')# degisti
+            self.tick = int.from_bytes(int24_bytes[28:], 'big', signed=True)# degisti
 
         self._pool_state_archive: Dict[int, UniswapV3PoolState] = {
             0: UniswapV3PoolState(
@@ -378,12 +392,17 @@ class V3LiquidityPool(BaseLiquidityPool):
                 except BitmapWordUnavailableError as e:
                     missing_word = e.args[1]
                     if self._sparse_bitmap:
+                        print(f"(swap) {self.name} fetching word {missing_word}")#degisti
                         logger.debug(f"(swap) {self.name} fetching word {missing_word}")
                         self._fetch_tick_data_at_word(word_position=missing_word)
                     else:
                         # bitmap is complete, so mark the word as empty
                         # self.tick_bitmap[missing_word] = UniswapV3BitmapAtWord()
                         _tick_bitmap[missing_word] = UniswapV3BitmapAtWord()
+                except Exception as e:#degisti
+                    import traceback#degisti
+                    traceback.print_exc()#degisti
+
                 else:
                     # nextInitializedTickWithinOneWord will search up to 256 ticks away, which may
                     # return a tick in an adjacent word if there are no initialized ticks in the current word.
@@ -621,7 +640,7 @@ class V3LiquidityPool(BaseLiquidityPool):
         Uses a lock to guard state-modifying methods that might cause race conditions
         when used with threads.
         """
-
+        _w3 = config.get_web3()
         _w3_contract = self._w3_contract
 
         with self._state_lock:
@@ -631,9 +650,24 @@ class V3LiquidityPool(BaseLiquidityPool):
                 config.get_web3().eth.get_block_number() if block_number is None else block_number
             )
 
-            _sqrt_price_x96, _tick, *_ = _w3_contract.functions.slot0().call(
-                block_identifier=block_number
-            )
+            try:#degisti
+                (
+                    _sqrt_price_x96,
+                    _tick,
+                    *_,
+                ) = _w3_contract.functions.slot0().call(block_identifier=self._update_block)
+            except BadFunctionCallOutput:#degisti
+                if not silent:#degisti
+                    print(f"Could not decode with eth_abi, switching to manual decoding...")#degisti
+                raw_output = _w3.eth.call({#degisti
+                    'to': _w3_contract.address,#degisti
+                    'data': _w3_contract.encodeABI(fn_name='slot0')#degisti
+                })#degisti
+                uint160_bytes = raw_output[:32]#degisti
+                int24_bytes = raw_output[32:64]#degisti
+                _sqrt_price_x96 = int.from_bytes(uint160_bytes, 'big')#degisti
+                _tick = int.from_bytes(int24_bytes[28:], 'big', signed=True)#degisti
+                
             _liquidity = _w3_contract.functions.liquidity().call(block_identifier=block_number)
 
             if self.sqrt_price_x96 != _sqrt_price_x96:

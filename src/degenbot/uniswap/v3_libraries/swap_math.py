@@ -29,7 +29,7 @@ def computeSwapStep(
             sqrtRatioNextX96 = SqrtPriceMath.getNextSqrtPriceFromInput(
                 sqrtRatioCurrentX96,
                 liquidity,
-                amountRemainingLessFee,
+                int(amountRemainingLessFee),
                 zeroForOne,
             )
     else:
