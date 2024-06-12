@@ -54,8 +54,12 @@ ZERO_ADDRESS: ChecksumAddress = to_checksum_address("0x0000000000000000000000000
 WRAPPED_NATIVE_TOKENS: Dict[int, ChecksumAddress] = {
     # Ethereum (WETH)
     1: to_checksum_address("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
+    # BNB (WBNB)
+    56: to_checksum_address("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"),
     # Fantom (WFTM)
     250: to_checksum_address("0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83"),
+    # Base (WETH)
+    8453: to_checksum_address("0x4200000000000000000000000000000000000006"),
     # Arbitrum (AETH)
     42161: to_checksum_address("0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"),
     # Avalanche (WAVAX)
