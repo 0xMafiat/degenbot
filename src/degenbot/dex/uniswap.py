@@ -43,6 +43,17 @@ FACTORY_ADDRESSES: Dict[
             "init_hash": "0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54"
         },
     },
+    56: {
+        # PancakeSwap: Router (V2)
+        to_checksum_address("0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73"): {
+            "init_hash": "0x00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5"
+        },
+        # PancakeSwap: Router (V3)
+        to_checksum_address("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"): {
+            "init_hash": None
+        },
+
+    },
 }
 
 

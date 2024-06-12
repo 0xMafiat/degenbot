@@ -94,6 +94,21 @@ _ROUTERS = {
                 3: to_checksum_address("0x1F98431c8aD98523631AE4a59f267346ea31F984"),
             },
         },
+    },
+    ChainId.BNB: {
+        to_checksum_address("0x10ED43C718714eb63d5aA57B78B54704E256024E"): {
+            "name": "PancakeSwap: Router",
+            "factory_address": {
+                2: to_checksum_address("0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73")
+            },
+        },
+        to_checksum_address("0x1A0A18AC4BECDDbd6389559687d1A73d8927E416"): {
+            "name": "PancakeSwap: Universal Router",
+            "factory_address": {
+                2: to_checksum_address("0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73"),
+                3: to_checksum_address("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"),
+            },
+        },
     }
 }
 
