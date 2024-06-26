@@ -50,7 +50,8 @@ FACTORY_ADDRESSES: Dict[
         },
         # PancakeSwap: Router (V3)
         to_checksum_address("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"): {
-            "init_hash": None
+            "init_hash": "0x6ce8eb472fa82df5469c6ab6d485f17c3ad13c8cd7af59b3d4a8026c5ce0f7e2",
+            "pool_deployer": "0x41ff9AA7e16B8B1a8a8dc4f0eFacd93D02d071c9"
         },
 
     },

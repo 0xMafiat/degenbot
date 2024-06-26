@@ -1,7 +1,7 @@
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Dict, List, Set, Tuple
 
-from eth_typing import ChecksumAddress
+from eth_typing import ChecksumAddress, ChainId
 from eth_utils.address import to_checksum_address
 from web3.contract.contract import Contract
 
@@ -388,7 +388,7 @@ class UniswapV3LiquidityPoolManager(UniswapLiquidityPoolManager):
                     address=pool_address,
                     lens=self._lens,
                     silent=silent,
-                    factory_address=self._factory_address,
+                    factory_address=self._factory_address if self.chain_id != ChainId.BNB else FACTORY_ADDRESSES[self.chain_id][self._factory_address]["pool_deployer"],
                     factory_init_hash=self._factory_init_hash,
                     **v3liquiditypool_kwargs,
                     state_block=state_block,
@@ -440,7 +440,7 @@ class UniswapV3LiquidityPoolManager(UniswapLiquidityPoolManager):
             pool_address = generate_v3_pool_address(
                 token_addresses=tokens_key,
                 fee=pool_fee,
-                factory_address=self._factory_address,
+                factory_address=self._factory_address if self.chain_id != ChainId.BNB else FACTORY_ADDRESSES[self.chain_id][self._factory_address]["pool_deployer"],
                 init_hash=self._factory_init_hash,
             )
         else:

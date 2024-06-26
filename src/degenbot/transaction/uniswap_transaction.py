@@ -10,6 +10,7 @@ from eth_typing import BlockNumber, ChainId, ChecksumAddress
 from eth_utils.address import to_checksum_address
 from hexbytes import HexBytes
 from web3 import Web3
+from web3.exceptions import BlockNotFound
 
 from .. import config
 from ..baseclasses import BaseSimulationResult, BaseTransaction
@@ -104,6 +105,13 @@ _ROUTERS = {
         },
         to_checksum_address("0x1A0A18AC4BECDDbd6389559687d1A73d8927E416"): {
             "name": "PancakeSwap: Universal Router",
+            "factory_address": {
+                2: to_checksum_address("0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73"),
+                3: to_checksum_address("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"),
+            },
+        },
+        to_checksum_address("0x13f4EA83D0bd40E75C8222255bc855a974568Dd4"): {
+            "name": "PancakeSwap: Smart Router",
             "factory_address": {
                 2: to_checksum_address("0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73"),
                 3: to_checksum_address("0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865"),
@@ -282,11 +290,22 @@ class UniswapTransaction(BaseTransaction):
         self.silent = False
 
     def _raise_if_past_deadline(self, deadline: int) -> None:
-        if (
-            self.state_block is not None
-            and config.get_web3().eth.get_block(self.state_block)["timestamp"] > deadline
-        ):
-            raise TransactionError("Deadline expired")
+        attempts = 0
+        max_attempts = 2
+        while attempts < 2:
+            try:
+                logger.debug(f"(_raise_if_past_deadline). stateblock: {self.state_block}")
+                block = config.get_web3().eth.get_block(self.state_block)
+                if block["timestamp"] > deadline:
+                    raise TransactionError("Deadline expired")
+                break
+            except BlockNotFound as e:
+                logger.error(f"(_raise_if_past_deadline) (BlockNotFound) {e}. Attempts: {attempts}/{max_attempts}")
+                self.state_block = config.get_web3().eth.get_block_number()
+                continue
+            except Exception as e:
+                logger.debug(f"Error retrieving block data: {e}")
+                raise
 
     def _raise_if_block_hash_mismatch(self, block_hash: HexBytes) -> None:
         logger.info(f"Checking previousBlockhash: {block_hash!r}")
