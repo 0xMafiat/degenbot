@@ -80,7 +80,8 @@ class V3LiquidityPool(BaseLiquidityPool):
         self.abi = abi if abi is not None else UNISWAP_V3_POOL_ABI
 
         _w3 = config.get_web3()
-        _w3_contract = self._w3_contract
+        _w3_contract = config.get_web3().eth.contract(address=self.address, abi=self.abi)
+        self._w3_contract = _w3_contract
 
         self.state: UniswapV3PoolState = UniswapV3PoolState(
             pool=self.address,
@@ -617,12 +618,12 @@ class V3LiquidityPool(BaseLiquidityPool):
             tick_data=new_tick_data,
         )
 
-    @property
-    def _w3_contract(self) -> Contract:
-        return config.get_web3().eth.contract(
-            address=self.address,
-            abi=self.abi,
-        )
+    # @property
+    # def _w3_contract(self) -> Contract:
+    #     return config.get_web3().eth.contract(
+    #         address=self.address,
+    #         abi=self.abi,
+    #     )
 
     def auto_update(
         self,

@@ -112,7 +112,8 @@ class LiquidityPool(BaseLiquidityPool):
         self.abi = abi if abi is not None else UNISWAP_V2_POOL_ABI
 
         _w3 = config.get_web3()
-        _w3_contract = self._w3_contract
+        _w3_contract = config.get_web3().eth.contract(address=self.address, abi=self.abi)
+        self._w3_contract = _w3_contract
 
         if factory_address:
             if factory_init_hash is None:
@@ -223,9 +224,9 @@ class LiquidityPool(BaseLiquidityPool):
     def __repr__(self) -> str:  # pragma: no cover
         return f"{self.__class__.__name__}(address={self.address}, token0={self.token0}, token1={self.token1})"
 
-    @property
-    def _w3_contract(self) -> Contract:
-        return config.get_web3().eth.contract(address=self.address, abi=self.abi)
+    # @property
+    # def _w3_contract(self) -> Contract:
+    #     return config.get_web3().eth.contract(address=self.address, abi=self.abi)
 
     @property
     def reserves_token0(self) -> int:
@@ -429,6 +430,7 @@ class LiquidityPool(BaseLiquidityPool):
             print_reserves=not silent,
             print_ratios=not silent,
             override_update_method="external",
+            update_block=update.block_number,
         )
 
     def get_absolute_price(
