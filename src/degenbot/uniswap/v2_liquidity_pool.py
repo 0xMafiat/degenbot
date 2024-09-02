@@ -425,7 +425,6 @@ class LiquidityPool(BaseLiquidityPool):
         update: UniswapV2PoolExternalUpdate,
         silent: bool = True,
     ) -> bool:
-        logging.info(f"call update reserves inside degenbot at {datetime.now()}")
         return self.update_reserves(
             silent=silent,
             external_token0_reserves=update.reserves_token0,
@@ -678,10 +677,7 @@ class LiquidityPool(BaseLiquidityPool):
         Updates token reserves. If update method is set to "polling", uses Web3 to read current
         contract values. If set to "external", uses the provided reserves without verification.
         """
-        logging.info(f"want contract at {datetime.now()}")
-
         _w3_contract = self._w3_contract
-        logging.info(f"got contract at {datetime.now()}")
 
         update_method = override_update_method or self._update_method
 
@@ -732,7 +728,6 @@ class LiquidityPool(BaseLiquidityPool):
             except Exception as e:
                 print(f"LiquidityPool: Exception in update_reserves (polling): {e}")
         elif update_method == "external":
-            logging.info(f"in external at {datetime.now()}")
             if not (external_token0_reserves is not None and external_token1_reserves is not None):
                 raise ValueError(
                     "Called update_reserves without providing reserve values for both tokens!"
@@ -745,13 +740,11 @@ class LiquidityPool(BaseLiquidityPool):
             ):
                 state_updated = False
             else:
-                logging.info(f"assigning state at {datetime.now()}")
                 self.state = UniswapV2PoolState(
                     pool=self.address,
                     reserves_token0=external_token0_reserves,
                     reserves_token1=external_token1_reserves,
                 )
-                logging.info(f"assigned state at {datetime.now()}")
                 # self.reserves_token0 = external_token0_reserves
                 # self.reserves_token1 = external_token1_reserves
 
@@ -759,7 +752,6 @@ class LiquidityPool(BaseLiquidityPool):
                 self._notify_subscribers(
                     message=UniswapV2PoolStateUpdated(self.state),
                 )
-                logging.info(f"notified subscribers at {datetime.now()}")
 
             if not silent:  # pragma: no cover
                 logger.info(f"[{self.name}]")
@@ -775,8 +767,6 @@ class LiquidityPool(BaseLiquidityPool):
                     )
         else:  # pragma: no cover
             raise ValueError(f"Update method {update_method} is not recognized.")
-        
-        logging.info(f"returning state updated at {datetime.now()}")
 
         return state_updated
 
