@@ -79,10 +79,6 @@ class V3LiquidityPool(BaseLiquidityPool):
         self.address = to_checksum_address(address)
         self.abi = abi if abi is not None else UNISWAP_V3_POOL_ABI
 
-        _w3 = config.get_web3()
-        _w3_contract = config.get_web3().eth.contract(address=self.address, abi=self.abi)
-        self._w3_contract = _w3_contract
-
         self.state: UniswapV3PoolState = UniswapV3PoolState(
             pool=self.address,
             liquidity=0,
@@ -94,72 +90,16 @@ class V3LiquidityPool(BaseLiquidityPool):
 
         # held for operations that manipulate state data
         self._state_lock = RLock() #degisti
-
-        self._update_block = state_block if state_block else _w3.eth.get_block_number()
-
-        if factory_address:
-            self.factory = to_checksum_address(factory_address)
-        else:
-            self.factory = to_checksum_address(_w3_contract.functions.factory().call())
-
-        if lens:
-            self.lens = lens
-        else:
-            # Use the singleton TickLens helper if available
-            try:
-                self.lens = self._lens_contracts[(_w3.eth.chain_id, self.factory)]
-            except KeyError:
-                self.lens = TickLens(address=TICKLENS_ADDRESSES[_w3.eth.chain_id][self.factory])
-                self._lens_contracts[(_w3.eth.chain_id, self.factory)] = self.lens
-
-        token0_address: ChecksumAddress = to_checksum_address(
-            _w3_contract.functions.token0().call()
-        )
-        token1_address: ChecksumAddress = to_checksum_address(
-            _w3_contract.functions.token1().call()
-        )
-
-        if tokens is not None:
-            if len(tokens) != 2:
-                raise ValueError(f"Expected exactly two tokens, found {len(tokens)}")
-
-            self.token0 = min(tokens)
-            self.token1 = max(tokens)
-
-            if not (self.token0 == token0_address and self.token1 == token1_address):
-                raise ValueError("Token addresses do not match tokens recorded at contract")
-        else:
-            _token_manager = Erc20TokenHelperManager(_w3.eth.chain_id)
-            self.token0 = _token_manager.get_erc20token(
-                address=token0_address,
-                silent=silent,
-            )
-            self.token1 = _token_manager.get_erc20token(
-                address=token1_address,
-                silent=silent,
-            )
-
-        self.tokens = (self.token0, self.token1)
-
-        self._fee: int = fee if fee is not None else _w3_contract.functions.fee().call()
-        self._tick_spacing = self._TICKSPACING_BY_FEE[self._fee]  # immutable
-
-        if factory_address is not None and factory_init_hash is not None:
-            computed_pool_address = generate_v3_pool_address(
-                token_addresses=[self.token0.address, self.token1.address],
-                fee=self._fee,
-                factory_address=factory_address,
-                init_hash=factory_init_hash,
-            )
-            if computed_pool_address != self.address:
-                raise ValueError(
-                    f"Pool address {self.address} does not match deterministic address {computed_pool_address} from factory"
-                )
-
-        if name:  # pragma: no cover
-            self.name = name
-        else:
-            self.name = f"{self.token0}-{self.token1} (V3, {self._fee/10000:.2f}%)"
+        self._tokens = tokens
+        self._lens = lens
+        self.__fee = fee
+        self._name = name
+        self.factory_address = factory_address
+        self.factory_init_hash = factory_init_hash
+        self._tick_bitmap = tick_bitmap
+        self._tick_data = tick_data
+        self.silent = silent
+        self.state_block = state_block
 
         if update_method is not None:  # pragma: no cover
             warnings.warn(
@@ -208,8 +148,80 @@ class V3LiquidityPool(BaseLiquidityPool):
                 for tick, liquidity_at_tick in tick_data.items()
             }
 
-        if tick_bitmap is None and tick_data is None:
-            logger.debug(f"{self} @ {self.address} updating -> {tick_bitmap=}, {tick_data=}")
+    def load_pool_attributes(self):
+        _w3 = config.get_web3()
+        _w3_contract = config.get_web3().eth.contract(address=self.address, abi=self.abi)
+        self._w3_contract = _w3_contract
+        #_w3_contract = self._w3_contract
+
+        self._update_block = self.state_block if self.state_block else _w3.eth.get_block_number()
+
+        if self.factory_address:
+            self.factory = to_checksum_address(self.factory_address)
+        else:
+            self.factory = to_checksum_address(_w3_contract.functions.factory().call())
+
+        if self._lens:
+            self.lens = self._lens
+        else:
+            # Use the singleton TickLens helper if available
+            try:
+                self.lens = self._lens_contracts[(_w3.eth.chain_id, self.factory)]
+            except KeyError:
+                self.lens = TickLens(address=TICKLENS_ADDRESSES[_w3.eth.chain_id][self.factory])
+                self._lens_contracts[(_w3.eth.chain_id, self.factory)] = self.lens
+
+        token0_address: ChecksumAddress = to_checksum_address(
+            _w3_contract.functions.token0().call()
+        )
+        token1_address: ChecksumAddress = to_checksum_address(
+            _w3_contract.functions.token1().call()
+        )
+
+        if self._tokens is not None:
+            if len(self._tokens) != 2:
+                raise ValueError(f"Expected exactly two tokens, found {len(self._tokens)}")
+
+            self.token0 = min(self._tokens)
+            self.token1 = max(self._tokens)
+
+            if not (self.token0 == token0_address and self.token1 == token1_address):
+                raise ValueError("Token addresses do not match tokens recorded at contract")
+        else:
+            _token_manager = Erc20TokenHelperManager(_w3.eth.chain_id)
+            self.token0 = _token_manager.get_erc20token(
+                address=token0_address,
+                silent=self.silent,
+            )
+            self.token1 = _token_manager.get_erc20token(
+                address=token1_address,
+                silent=self.silent,
+            )
+
+        self.tokens = (self.token0, self.token1)
+
+        self._fee: int = self.__fee if self.__fee is not None else _w3_contract.functions.fee().call()
+        self._tick_spacing = self._TICKSPACING_BY_FEE[self._fee]  # immutable
+
+        if self.factory_address is not None and self.factory_init_hash is not None:
+            computed_pool_address = generate_v3_pool_address(
+                token_addresses=[self.token0.address, self.token1.address],
+                fee=self._fee,
+                factory_address=self.factory_address,
+                init_hash=self.factory_init_hash,
+            )
+            if computed_pool_address != self.address:
+                raise ValueError(
+                    f"Pool address {self.address} does not match deterministic address {computed_pool_address} from factory"
+                )
+
+        if self._name:  # pragma: no cover
+            self.name = self._name
+        else:
+            self.name = f"{self.token0}-{self.token1} (V3, {self._fee/10000:.2f}%)"
+
+        if self._tick_bitmap is None and self._tick_data is None:
+            logger.debug(f"{self} @ {self.address} updating -> {self.tick_bitmap=}, {self.tick_data=}")
             word_position, _ = self._get_tick_bitmap_word_and_bit_position(self.tick)
 
             self._fetch_tick_data_at_word(
@@ -228,7 +240,7 @@ class V3LiquidityPool(BaseLiquidityPool):
                 *_,
             ) = _w3_contract.functions.slot0().call(block_identifier=self._update_block)
         except BadFunctionCallOutput:# degisti
-            if not silent:# degisti
+            if not self.silent:# degisti
                 print(f"Could not decode with eth_abi, switching to manual decoding...")# degisti
             raw_output = _w3.eth.call({# degisti
                 'to': _w3_contract.address,# degisti
@@ -253,7 +265,7 @@ class V3LiquidityPool(BaseLiquidityPool):
 
         self._subscribers = set()
 
-        if not silent:  # pragma: no cover
+        if not self.silent:  # pragma: no cover
             logger.info(self.name)
             logger.info(f"• Token 0: {self.token0}")
             logger.info(f"• Token 1: {self.token1}")
@@ -274,6 +286,7 @@ class V3LiquidityPool(BaseLiquidityPool):
             "_state_lock",
             "_subscribers",
             "lens",
+            "_w3_contract"
         )
 
         with self._state_lock:

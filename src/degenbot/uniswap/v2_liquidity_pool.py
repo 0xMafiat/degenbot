@@ -94,7 +94,6 @@ class LiquidityPool(BaseLiquidityPool):
             retrieved from chain, and skipping some validation. Useful for
             simulating transactions through pools that do not exist.
         """
-
         if empty and any(
             [
                 address is None,
@@ -112,10 +111,6 @@ class LiquidityPool(BaseLiquidityPool):
 
         self.address: ChecksumAddress = to_checksum_address(address)
         self.abi = abi if abi is not None else UNISWAP_V2_POOL_ABI
-
-        _w3 = config.get_web3()
-        _w3_contract = config.get_web3().eth.contract(address=self.address, abi=self.abi)
-        self._w3_contract = _w3_contract
 
         if factory_address:
             if factory_init_hash is None:
@@ -143,52 +138,10 @@ class LiquidityPool(BaseLiquidityPool):
                 )
 
         self._update_method = update_method
-        self.update_block: BlockNumber | int = _w3.eth.get_block_number()
-        self.factory = (
-            to_checksum_address(factory_address)
-            if factory_address is not None
-            else _w3_contract.functions.factory().call()
-        )
-
-        chain_id = _w3.eth.chain_id
-        if tokens is not None:
-            if len(tokens) != 2:
-                raise ValueError(f"Expected 2 tokens, found {len(tokens)}")
-            self.token0 = min(tokens)
-            self.token1 = max(tokens)
-        else:
-            _token_manager = Erc20TokenHelperManager(chain_id)
-            self.token0 = _token_manager.get_erc20token(
-                address=_w3_contract.functions.token0().call(),
-                silent=silent,
-            )
-            self.token1 = _token_manager.get_erc20token(
-                address=_w3_contract.functions.token1().call(),
-                silent=silent,
-            )
-
-        self.tokens = (self.token0, self.token1)
-
-        if factory_address is not None and factory_init_hash is not None:
-            computed_pool_address = generate_v2_pool_address(
-                token_addresses=[self.token0.address, self.token1.address],
-                factory_address=factory_address,
-                init_hash=factory_init_hash,
-            )
-            if computed_pool_address != self.address:
-                raise ValueError(
-                    f"Pool address {self.address} does not match deterministic address {computed_pool_address} from factory"
-                )
-
-        if name is not None:
-            self.name = name
-        else:
-            fee_string = (
-                f"{100*self.fee_token0.numerator/self.fee_token0.denominator:.2f}"
-                if self.fee_token0 == self.fee_token1
-                else f"{100*self.fee_token0.numerator/self.fee_token0.denominator:.2f}/{100*self.fee_token1.numerator/self.fee_token1.denominator:.2f}"
-            )
-            self.name = f"{self.token0}-{self.token1} (V2, {fee_string}%)"
+        self._tokens = tokens
+        self.factory_address = factory_address
+        self.factory_init_hash = factory_init_hash
+        self._name = name
 
         if self._update_method == "event":  # pragma: no cover
             raise ValueError(
@@ -197,15 +150,70 @@ class LiquidityPool(BaseLiquidityPool):
 
         self._pool_state_archive: Dict[int, UniswapV2PoolState] = {}
 
-        AllPools(chain_id)[self.address] = self
-
         self._subscribers = set()
 
-        if not silent:  # pragma: no cover
+        self.silent = silent
+        self.empty = empty
+
+    def load_pool_attributes(self):
+        _w3 = config.get_web3()
+        _w3_contract = config.get_web3().eth.contract(address=self.address, abi=self.abi)
+        self._w3_contract = _w3_contract
+
+        self.update_block: BlockNumber | int = _w3.eth.get_block_number()
+        self.factory = (
+            to_checksum_address(self.factory_address)
+            if self.factory_address is not None
+            else _w3_contract.functions.factory().call()
+        )
+
+        chain_id = _w3.eth.chain_id
+        if self._tokens is not None:
+            if len(self._tokens) != 2:
+                raise ValueError(f"Expected 2 tokens, found {len(self._tokens)}")
+            self.token0 = min(self._tokens)
+            self.token1 = max(self._tokens)
+        else:
+            _token_manager = Erc20TokenHelperManager(chain_id)
+            self.token0 = _token_manager.get_erc20token(
+                address=_w3_contract.functions.token0().call(),
+                silent=self.silent,
+            )
+            self.token1 = _token_manager.get_erc20token(
+                address=_w3_contract.functions.token1().call(),
+                silent=self.silent,
+            )
+        
+        if self.factory_address is not None and self.factory_init_hash is not None:
+            computed_pool_address = generate_v2_pool_address(
+                token_addresses=[self.token0.address, self.token1.address],
+                factory_address=self.factory_address,
+                init_hash=self.factory_init_hash,
+            )
+            if computed_pool_address != self.address:
+                raise ValueError(
+                    f"Pool address {self.address} does not match deterministic address {computed_pool_address} from factory"
+                )
+        
+        if self._name:
+            self.name = self._name
+        else:
+            fee_string = (
+                f"{100*self.fee_token0.numerator/self.fee_token0.denominator:.2f}"
+                if self.fee_token0 == self.fee_token1
+                else f"{100*self.fee_token0.numerator/self.fee_token0.denominator:.2f}/{100*self.fee_token1.numerator/self.fee_token1.denominator:.2f}"
+            )
+            self.name = f"{self.token0}-{self.token1} (V2, {fee_string}%)"
+
+        self.tokens = (self.token0, self.token1)
+        AllPools(chain_id)[self.address] = self
+
+        if not self.silent:  # pragma: no cover
             logger.info(self.name)
-            if not empty:
+            if not self.empty:
                 logger.info(f"• Token 0: {self.token0} - Reserves: {self.reserves_token0}")
                 logger.info(f"• Token 1: {self.token1} - Reserves: {self.reserves_token1}")
+
 
     def __getstate__(self) -> Dict[str, Any]:
         # Remove objects that either cannot be pickled or are unnecessary to perform the calculation
@@ -214,6 +222,7 @@ class LiquidityPool(BaseLiquidityPool):
             "_state_lock",
             "_subscribers",
             "_pool_state_archive",
+            "_w3_contract"
         )
 
         with self._state_lock:
